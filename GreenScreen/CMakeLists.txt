@@ -22,6 +22,7 @@ add_executable (GreenScreen
 	# Header & CPP files go here
 	main.cpp
 	triangle.h
+	test_pyramid.h
 	${VERTEX_SHADERS}
 	${PIXEL_SHADERS}
 )

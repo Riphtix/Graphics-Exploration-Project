@@ -2,19 +2,24 @@
 #define GATEWARE_ENABLE_CORE // All libraries need this
 #define GATEWARE_ENABLE_SYSTEM // Graphics libs require system level libraries
 #define GATEWARE_ENABLE_GRAPHICS // Enables all Graphics Libraries
+#define GATEWARE_ENABLE_MATH // gimme math
+
 // Ignore some GRAPHICS libraries we aren't going to use
 #define GATEWARE_DISABLE_GDIRECTX12SURFACE // we have another template for this
 #define GATEWARE_DISABLE_GRASTERSURFACE // we have another template for this
 #define GATEWARE_DISABLE_GOPENGLSURFACE // we have another template for this
 #define GATEWARE_DISABLE_GVULKANSURFACE // we have another template for this
+
 // With what we want & what we don't defined we can include the API
 #include "../Gateware/Gateware.h"
 #include "triangle.h" // example rendering code (not Gateware code!)
+
 // open some namespaces to compact the code a bit
 using namespace GW;
 using namespace CORE;
 using namespace SYSTEM;
 using namespace GRAPHICS;
+
 // lets pop a window and use D3D11 to clear to a green screen
 int main()
 {
@@ -23,10 +28,12 @@ int main()
 	GDirectX11Surface d3d11;
 	if (+win.Create(0, 0, 800, 600, GWindowStyle::WINDOWEDBORDERED))
 	{
-		float clr[] = { 57/255.0f, 1.0f, 20/255.0f, 1 }; // start with a neon green
+		float bg_r = 17, bg_g = 157, bg_b = 167;
+
+		float clr[] = { bg_r/255.0f, bg_g/255.0f, bg_b/255.0f, 1 }; // start with a teal color
 		msgs.Create(win, [&]() {
-			if (+msgs.Find(GWindow::Events::RESIZE, true))
-				clr[2] += 0.01f; // move towards a cyan as they resize
+			//if (+msgs.Find(GWindow::Events::RESIZE, true))
+				//clr[2] += 0.01f; // move towards a cyan as they resize
 			});
 		if (+d3d11.Create(win, 0))
 		{
