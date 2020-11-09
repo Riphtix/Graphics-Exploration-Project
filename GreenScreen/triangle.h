@@ -4,10 +4,12 @@
 #pragma comment(lib, "d3dcompiler.lib")
 
 #include "test_pyramid.h"
+#include "DDSTextureLoader.h"
+#include "PixelShader.h"
 
 // Simple Vertex Shader
 const char* vertexShaderSource = R"(
-cbuffer SHADER_VARIABLES
+cbuffer SHADER_VARIABLES : register(b0)
 {
 	float4x4 world;
 	float4x4 view;
@@ -21,26 +23,48 @@ struct Vertex_IN
 	float3 nrm : NORMAL;
 };
 
-// an ultra simple hlsl vertex shader
-float4 main(Vertex_IN input) : SV_POSITION
+struct Vertex_OUT
 {
-	//input.posL.z += 1.0f;
-	float4 outPos = float4(input.posL, 1);
-	outPos = mul(world, outPos);
-	outPos = mul(view, outPos);
-	outPos = mul(projection, outPos);
-	return outPos;
+	float4 posH : SV_POSITION;
+	float3 uvw : TEXCOORD;
+	float3 nrm : NORMAL;
+};
+
+// an ultra simple hlsl vertex shader
+Vertex_OUT main(Vertex_IN input)
+{
+	Vertex_OUT output;
+	output.posH = float4(input.posL, 1);
+	output.posH = mul(world, output.posH);
+	output.posH = mul(view, output.posH);
+	output.posH = mul(projection, output.posH);
+
+	output.uvw = input.uvw;
+	output.nrm = mul(world, float4(input.nrm, 0)).xyz;
+
+	return output;
 }
 )";
 
 // Simple Pixel Shader
-const char* pixelShaderSource = R"(
-// an ultra simple hlsl pixel shader
-float4 main() : SV_TARGET 
-{	
-	return float4(200/255.0f,150/255.0f,8/255.0f,0); 
-}
-)";
+//const char* pixelShaderSource = R"(
+//Texture2D mytexture : register(t0);
+//sampler quality : register(s0);
+//
+//struct Vertex_OUT
+//{
+//	float4 posH : SV_POSITION;
+//	float3 uvw : TEXCOORD;
+//	float3 nrm : NORMAL;
+//};
+//
+//// an ultra simple hlsl pixel shader
+//float4 main(Vertex_OUT input) : SV_TARGET 
+//{	
+//	return mytexture.Sample(quality, input.uvw.xy);
+//	//return float4(input.uvw, 0); //float4(200/255.0f,150/255.0f,8/255.0f,0); 
+//}
+//)";
 
 // Creation, Rendering & Cleanup
 class Triangle
@@ -66,6 +90,10 @@ class Triangle
 	Microsoft::WRL::ComPtr<ID3D11VertexShader>	vertexShader;
 	Microsoft::WRL::ComPtr<ID3D11PixelShader>	pixelShader;
 	Microsoft::WRL::ComPtr<ID3D11InputLayout>	vertexFormat;
+
+	// for texuring
+	Microsoft::WRL::ComPtr<ID3D11Texture2D>		texture;
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
 public:
 	Triangle(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX11Surface _d3d)
 	{
@@ -105,7 +133,7 @@ public:
 			std::cout << (char*)errors->GetBufferPointer() << std::endl;
 
 		// Create Pixel Shader
-		Microsoft::WRL::ComPtr<ID3DBlob> psBlob; errors.Reset();
+		/*Microsoft::WRL::ComPtr<ID3DBlob> psBlob; errors.Reset();
 		if (SUCCEEDED(D3DCompile(pixelShaderSource, strlen(pixelShaderSource),
 			nullptr, nullptr, nullptr, "main", "ps_4_0", compilerFlags, 0,
 			psBlob.GetAddressOf(), errors.GetAddressOf())))
@@ -114,7 +142,8 @@ public:
 				psBlob->GetBufferSize(), nullptr, pixelShader.GetAddressOf());
 		}
 		else
-			std::cout << (char*)errors->GetBufferPointer() << std::endl;
+			std::cout << (char*)errors->GetBufferPointer() << std::endl;*/
+		creator->CreatePixelShader(PixelShader, sizeof(PixelShader), nullptr, pixelShader.GetAddressOf());
 
 		// Create Input Layout
 		D3D11_INPUT_ELEMENT_DESC format[] = {
@@ -131,10 +160,10 @@ public:
 
 		// math setup here
 		m.Create();
-		GW::MATH::GVECTORF move = { 0, 0, 1, 0 };
+		GW::MATH::GVECTORF move = { 0, 0, 0, 0 };
 		m.TranslatelocalF(Send2Shader.world, move, Send2Shader.world);
 
-		GW::MATH::GVECTORF eye = { 5, 5, 5, 0 };
+		GW::MATH::GVECTORF eye = { 2, 0.5f, -1, 0 };
 		GW::MATH::GVECTORF at = { 0, 0, 0, 0 };
 		GW::MATH::GVECTORF up = { 0, 1, 0, 0 };
 		m.LookAtLHF(eye, at, up, Send2Shader.view);
@@ -146,19 +175,26 @@ public:
 		D3D11_SUBRESOURCE_DATA cData = { &Send2Shader, 0, 0 };
 		CD3D11_BUFFER_DESC cDesc(sizeof(Send2Shader), D3D11_BIND_CONSTANT_BUFFER);
 		creator->CreateBuffer(&cDesc, &cData, constantBuffer.GetAddressOf());
+
+		// load texture into VRAM
+		CreateDDSTextureFromFile(creator, L"../crate.dds", (ID3D11Resource**)texture.GetAddressOf(), srv.GetAddressOf());
 	}
 	void Render()
 	{
+		// modify world
+		m.RotationYF(Send2Shader.world, 3.14 / 100.0f, Send2Shader.world);
 
 		// grab the context & render target
 		ID3D11DeviceContext* con;
 		ID3D11RenderTargetView* view;
+		ID3D11DepthStencilView* depth;
 		d3d.GetImmediateContext((void**)&con);
 		d3d.GetRenderTargetView((void**)&view);
+		d3d.GetDepthStencilView((void**)&depth);
 
 		// setup the pipeline
 		ID3D11RenderTargetView* const views[] = { view };
-		con->OMSetRenderTargets(ARRAYSIZE(views), views, nullptr);
+		con->OMSetRenderTargets(ARRAYSIZE(views), views, depth);
 		const UINT strides[] = { sizeof(OBJ_VERT) };
 		const UINT offsets[] = { 0 };
 		ID3D11Buffer* const buffs[] = { vertexBuffer.Get() };
@@ -171,6 +207,12 @@ public:
 
 		// now we can draw
 		con->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		// update subresource
+		con->UpdateSubresource(constantBuffer.Get(), 0, nullptr, &Send2Shader, sizeof(Send2Shader), 0);
+		con->PSSetShaderResources(0, 1, srv.GetAddressOf());
+
+		// Draw
 		con->DrawIndexed(test_pyramid_indexcount, 0, 0);
 
 		// release temp handles

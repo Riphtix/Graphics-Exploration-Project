@@ -35,7 +35,7 @@ int main()
 			//if (+msgs.Find(GWindow::Events::RESIZE, true))
 				//clr[2] += 0.01f; // move towards a cyan as they resize
 			});
-		if (+d3d11.Create(win, 0))
+		if (+d3d11.Create(win, GW::GRAPHICS::DEPTH_BUFFER_SUPPORT))
 		{
 			Triangle tri(win, d3d11);
 			while (+win.ProcessWindowEvents())
@@ -43,16 +43,21 @@ int main()
 				IDXGISwapChain* swap;
 				ID3D11DeviceContext* con;
 				ID3D11RenderTargetView* view;
+				ID3D11DepthStencilView* depth;
 				if (+d3d11.GetImmediateContext((void**)&con) &&
 					+d3d11.GetRenderTargetView((void**)&view) &&
+					+d3d11.GetDepthStencilView((void**)&depth) &&
 					+d3d11.GetSwapchain((void**)&swap))
 				{
 					con->ClearRenderTargetView(view, clr);
+					con->ClearDepthStencilView(depth, D3D11_CLEAR_DEPTH, 1, 0);
+
 					tri.Render();
 					swap->Present(1, 0);
 					// release incremented COM reference counts
 					swap->Release();
 					view->Release();
+					depth->Release();
 					con->Release();
 				}
 			}
