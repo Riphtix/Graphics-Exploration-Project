@@ -28,14 +28,17 @@ struct Vertex_OUT
 	float4 posH : SV_POSITION;
 	float3 uvw : TEXCOORD;
 	float3 nrm : NORMAL;
+	float3 posW : WORLD;
 };
 
 // an ultra simple hlsl vertex shader
 Vertex_OUT main(Vertex_IN input)
 {
 	Vertex_OUT output;
+	
 	output.posH = float4(input.posL, 1);
 	output.posH = mul(world, output.posH);
+	output.posW = output.posH;
 	output.posH = mul(view, output.posH);
 	output.posH = mul(projection, output.posH);
 
@@ -87,13 +90,19 @@ class Triangle
 	Microsoft::WRL::ComPtr<ID3D11Buffer>		vertexBuffer;
 	Microsoft::WRL::ComPtr<ID3D11Buffer>		indexBuffer;
 	Microsoft::WRL::ComPtr<ID3D11Buffer>		constantBuffer;
+
 	Microsoft::WRL::ComPtr<ID3D11VertexShader>	vertexShader;
 	Microsoft::WRL::ComPtr<ID3D11PixelShader>	pixelShader;
+
 	Microsoft::WRL::ComPtr<ID3D11InputLayout>	vertexFormat;
+	Microsoft::WRL::ComPtr<ID3D11SamplerState>  samplerState;
 
 	// for texuring
 	Microsoft::WRL::ComPtr<ID3D11Texture2D>		texture;
 	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
+
+	// camera
+	GW::INPUT::GInput cameraController;
 public:
 	Triangle(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX11Surface _d3d)
 	{
@@ -101,6 +110,8 @@ public:
 		d3d = _d3d;
 		ID3D11Device* creator;
 		d3d.GetDevice((void**)&creator);
+
+		cameraController.Create(win);
 
 		// Create Vertex Buffer
 		/*float verts[] = {
@@ -115,6 +126,16 @@ public:
 		D3D11_SUBRESOURCE_DATA iData = { test_pyramid_indicies, 0, 0 };
 		CD3D11_BUFFER_DESC iDesc(sizeof(test_pyramid_indicies), D3D11_BIND_INDEX_BUFFER);
 		creator->CreateBuffer(&iDesc, &iData, indexBuffer.GetAddressOf());
+
+		D3D11_SAMPLER_DESC samplerDesc;
+		samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+		samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+		samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+		samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+		samplerDesc.MipLODBias = 0;
+		samplerDesc.MinLOD = 0;
+		samplerDesc.MaxLOD = 10;
+		creator->CreateSamplerState(&samplerDesc, &samplerState);
 
 		// Create Vertex Shader
 		UINT compilerFlags = D3DCOMPILE_ENABLE_STRICTNESS;
@@ -184,6 +205,43 @@ public:
 		// modify world
 		m.RotationYF(Send2Shader.world, 3.14 / 100.0f, Send2Shader.world);
 
+		float keyPress = 0;
+		cameraController.GetState(G_KEY_W, keyPress);
+		if (keyPress > 0) {
+			GW::MATH::GVECTORF adj = { 0.0f, 0.0f, -0.1f, 1.0f }; // forward = -0.1f z backward = 0.1f z left = 0.1f x right = -0.1f x
+			m.TranslatelocalF(Send2Shader.view, adj, Send2Shader.view);
+		}
+
+		cameraController.GetState(G_KEY_S, keyPress);
+		if (keyPress > 0) {
+			GW::MATH::GVECTORF adj = { 0.0f, 0.0f, 0.1f, 1.0f };
+			m.TranslatelocalF(Send2Shader.view, adj, Send2Shader.view);
+		}
+
+		cameraController.GetState(G_KEY_A, keyPress);
+		if (keyPress > 0) {
+			GW::MATH::GVECTORF adj = { 0.1f, 0.0f, 0.0f, 1.0f };
+			m.TranslatelocalF(Send2Shader.view, adj, Send2Shader.view);
+		}
+
+		cameraController.GetState(G_KEY_D, keyPress);
+		if (keyPress > 0) {
+			GW::MATH::GVECTORF adj = { -0.1f, 0.0f, 0.0f, 1.0f };
+			m.TranslatelocalF(Send2Shader.view, adj, Send2Shader.view);
+		}
+
+		cameraController.GetState(G_KEY_Q, keyPress);
+		if (keyPress > 0) {
+			GW::MATH::GVECTORF adj = { 0.0f, -0.1f, 0.0f, 1.0f };
+			m.TranslatelocalF(Send2Shader.view, adj, Send2Shader.view);
+		}
+
+		cameraController.GetState(G_KEY_E, keyPress);
+		if (keyPress > 0) {
+			GW::MATH::GVECTORF adj = { 0.0f, 0.1f, 0.0f, 1.0f };
+			m.TranslatelocalF(Send2Shader.view, adj, Send2Shader.view);
+		}
+
 		// grab the context & render target
 		ID3D11DeviceContext* con;
 		ID3D11RenderTargetView* view;
@@ -204,6 +262,8 @@ public:
 		con->PSSetShader(pixelShader.Get(), nullptr, 0);
 		con->IASetInputLayout(vertexFormat.Get());
 		con->VSSetConstantBuffers(0, 1, constantBuffer.GetAddressOf());
+
+		//con->PSSetSamplers(0, 1, &samplerState);
 
 		// now we can draw
 		con->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
