@@ -24,7 +24,9 @@ add_executable (GreenScreen
 	# Header & CPP files go here
 	main.cpp
 	triangle.h
-	test_pyramid.h
+	cube.h
+	sphere.h
+	9cube.h
 	DDSTextureLoader.h
 	DDSTextureLoader.cpp
 	${VERTEX_SHADERS}
