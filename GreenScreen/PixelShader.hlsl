@@ -1,5 +1,5 @@
 Texture2D mytexture : register(t0);
-sampler quality : register(s0);
+SamplerState samplerState : register(s0);
 
 struct Vertex_OUT
 {
@@ -9,10 +9,18 @@ struct Vertex_OUT
     float3 posW : WORLD;
 };
 
+cbuffer P_Light : register(b0)
+{
+    float4 p_pos;
+    float4 p_rgba;
+    float4 p_radius;
+    float4 camera_pos;
+}
+
 // an ultra simple hlsl pixel shader
 float4 main(Vertex_OUT input) : SV_TARGET
 {
-    float4 surface = mytexture.Sample(quality, input.uvw.xy);
+    float4 surface = mytexture.Sample(samplerState, input.uvw.xy);
     
     // Ambiant light
     float3 aLightPosition = float3(-1, -1, 5);
@@ -23,22 +31,22 @@ float4 main(Vertex_OUT input) : SV_TARGET
     // Directional light
     float3 dLightPosition = float3(-1, -1, 5);
     float dLightRatio = saturate(dot(-normalize(dLightPosition), normalize(input.nrm)));
-    float dIntensity = 0.3f;
+    float dIntensity = 1.0f;
     float4 dColor = float4(0.0f, 0.0f, 1.0f, 1) * dIntensity;
     float4 dLightResult = dLightRatio * dColor;
     
     // Point Light
-    float3 pLightPosition = float3(5, 0, 0) - input.posW;
-    float attenuation = 1.0 - saturate(length(normalize(pLightPosition) - normalize(input.nrm)) / 2.0f);
-    float pIntensity = 0.3f;
-    float4 pColor = float4(0.0f, 1.0f, 0.0f, 1) * pIntensity;
+    float3 pLightPosition = normalize(p_pos.xyz - input.posW);
+    float attenuation = 1.0 - saturate(length(pLightPosition.xyz - input.nrm) / 2.0f);
+    float pIntensity =1.0f;
+    float4 pColor = p_rgba * pIntensity;
     float4 pLightResult = (attenuation * attenuation) * pColor;
     
     // Spot Light
     float3 sLightPosition = float3(0, 10, 0);
     float3 coneDirection = float3(0, -1, 0);
     float2 coneAngle = float2(0.93f, 0.99f);
-    float sIntensity = 0.3f;
+    float sIntensity = 1.0f;
     float4 sColor = float4(1, 0, 0, 1) * sIntensity;
     float3 lightDir = normalize(sLightPosition - input.posW);
     float surfaceRatio = saturate(dot(-lightDir, coneDirection));
@@ -48,18 +56,13 @@ float4 main(Vertex_OUT input) : SV_TARGET
     float4 sLightResult = (attenuation * attenuation) * spotFac * lightRatio * sColor;
     
     // Reflection Maping
-    float4 cameraPos = { 2, 1.5, -1, 0 };
+    float4 cameraPos = /*camera_pos*/ { 5, 0, -1, 0 };
     float3 h = normalize(normalize(cameraPos.xyz - input.posW) - (pLightPosition - input.posW) - (dLightPosition - input.posW) - (sLightPosition - input.posW));
     float specIntensity = 0.25f;
     float specLighting = (pow(saturate(dot(h, input.nrm)), 2.0f) + saturate(pColor * sColor * dColor)) * specIntensity;
     
-    //float lightRatio = dot(normalize(input.nrm), -normalize(float3(-1, -1, 1)));
-    //float l_r = 0, l_g = 0, l_b = 255;
-    
     surface.a = 1.0f;
-    float4 baseColor = { 1, 1, 1, 1 };
-    float4 ambiant = { 0.1, 0.1, 0.1, 1 };
-    float4 color = saturate(surface + dLightResult + pLightResult + sLightResult + specLighting);
-    return color; //surface * lightRatio + float4(l_r / 255, l_g / 255, l_b / 255, 1);
-	//return float4(input.uvw, 0); float4(200/255.0f,150/255.0f,8/255.0f,0); 
+    float4 ambiant = { 0.4, 0.4, 0.4, 1 };
+    float4 color = ambiant * saturate(surface + dLightResult + pLightResult + sLightResult + specLighting);
+    return color;
 }

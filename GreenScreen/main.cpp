@@ -28,9 +28,9 @@ int main()
 	GDirectX11Surface d3d11;
 	if (+win.Create(0, 0, 800, 600, GWindowStyle::WINDOWEDBORDERED))
 	{
-		float bg_r = 17, bg_g = 157, bg_b = 167;
+		//float bg_r = 17, bg_g = 157, bg_b = 167;
 
-		float clr[] = { bg_r/255.0f, bg_g/255.0f, bg_b/255.0f, 1 }; // start with a teal color
+		float clr[] = { /*bg_r/255.0f, bg_g/255.0f, bg_b/255.0f*/0,0,0, 1 }; // start with a teal color
 		msgs.Create(win, [&]() {
 			//if (+msgs.Find(GWindow::Events::RESIZE, true))
 				//clr[2] += 0.01f; // move towards a cyan as they resize

@@ -13,10 +13,13 @@ ADD_DEFINITIONS(-D_UNICODE)
 set(VERTEX_SHADERS 
 	# add vertex shader (.hlsl) files here
 	VertexShader.hlsl
+	SkyBoxVertexShader.hlsl
 )
 set(PIXEL_SHADERS 
 	# add pixel shader (.hlsl) files here
 	PixelShader.hlsl
+	ReflectionShader.hlsl
+	SkyBoxPixelShader.hlsl
 )
 
 # Add any new C/C++ source code here
@@ -26,6 +29,7 @@ add_executable (GreenScreen
 	triangle.h
 	cube.h
 	sphere.h
+	skybox.h
 	9cube.h
 	DDSTextureLoader.h
 	DDSTextureLoader.cpp
