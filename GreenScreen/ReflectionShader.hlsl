@@ -21,7 +21,7 @@ cbuffer P_Light : register(b0)
 float4 main(Vertex_OUT input) : SV_TARGET
 {
     float4 surface = mytexture.Sample(samplerState, input.uvw.xy);
-    float4 cameraPos = /*camera_pos*/ { 5, 0, -1, 0 };
+    float4 cameraPos = camera_pos;
     
     float3 reflection = float3(0.0f, 0.0f, 0.0f);
     float4 rColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -38,7 +38,7 @@ float4 main(Vertex_OUT input) : SV_TARGET
     
     // Point Light
     float3 pLightPosition = normalize(p_pos.xyz - input.posW);
-    float attenuation = 1.0 - saturate(length(pLightPosition.xyz - input.nrm) / 2.0f);
+    float attenuation = 1.0 - saturate(length(pLightPosition.xyz - input.nrm) / p_radius);
     float pIntensity = 1.0f;
     float4 pColor = p_rgba * pIntensity;
     float4 pLightResult = (attenuation * attenuation) * pColor;

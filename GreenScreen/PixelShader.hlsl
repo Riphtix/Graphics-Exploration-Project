@@ -37,8 +37,8 @@ float4 main(Vertex_OUT input) : SV_TARGET
     
     // Point Light
     float3 pLightPosition = normalize(p_pos.xyz - input.posW);
-    float attenuation = 1.0 - saturate(length(pLightPosition.xyz - input.nrm) / 2.0f);
-    float pIntensity =1.0f;
+    float attenuation = 1.0 - saturate(length(p_pos.xyz - input.posW) / p_radius.x);
+    float pIntensity = 0.5f;
     float4 pColor = p_rgba * pIntensity;
     float4 pLightResult = (attenuation * attenuation) * pColor;
     
@@ -56,13 +56,13 @@ float4 main(Vertex_OUT input) : SV_TARGET
     float4 sLightResult = (attenuation * attenuation) * spotFac * lightRatio * sColor;
     
     // Reflection Maping
-    float4 cameraPos = /*camera_pos*/ { 5, 0, -1, 0 };
+    float4 cameraPos = camera_pos;
     float3 h = normalize(normalize(cameraPos.xyz - input.posW) - (pLightPosition - input.posW) - (dLightPosition - input.posW) - (sLightPosition - input.posW));
     float specIntensity = 0.25f;
     float specLighting = (pow(saturate(dot(h, input.nrm)), 2.0f) + saturate(pColor * sColor * dColor)) * specIntensity;
     
     surface.a = 1.0f;
     float4 ambiant = { 0.4, 0.4, 0.4, 1 };
-    float4 color = ambiant * saturate(surface + dLightResult + pLightResult + sLightResult + specLighting);
+    float4 color = ambiant * saturate(surface + pLightResult + dLightResult + sLightResult + specLighting);
     return color;
 }

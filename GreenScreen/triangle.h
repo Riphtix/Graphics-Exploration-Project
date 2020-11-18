@@ -6,8 +6,9 @@
 #include "cube.h"
 #include "9cube.h"
 #include "sphere.h"
-#include "SkyBox.h"
+#include "skybox.h"
 #include "DDSTextureLoader.h"
+
 // Shader Includes
 #include "VertexShader.h"
 #include "SkyBoxVertexShader.h"
@@ -18,16 +19,6 @@
 
 using namespace GW::MATH;
 
-GVECTORF CameraPos = { 5, 0, 0, 0 };
-D3D_DRIVER_TYPE g_driverType = D3D_DRIVER_TYPE_NULL;
-
-struct P_Light {
-	GVECTORF pos;
-	GVECTORF rgba;
-	GVECTORF radius;
-	GVECTORF cameraPos;
-};
-
 // Creation, Rendering & Cleanup
 class Triangle
 {
@@ -37,6 +28,16 @@ class Triangle
 		GMATRIXF view = GIdentityMatrixF;
 		GMATRIXF projection = GIdentityMatrixF;
 	}Send2Shader;
+
+	GVECTORF CameraPos = { 5, 0, 0, 1 };
+	D3D_DRIVER_TYPE g_driverType = D3D_DRIVER_TYPE_NULL;
+
+	struct P_Light {
+		GVECTORF pos;
+		GVECTORF rgba;
+		GVECTORF radius;
+		GVECTORF cameraPos;
+	}point;
 
 	// handle for math lib
 	GMatrix m;
@@ -52,6 +53,7 @@ class Triangle
 	Microsoft::WRL::ComPtr<ID3D11Buffer>		skyboxVertexBuffer;
 	Microsoft::WRL::ComPtr<ID3D11Buffer>		skyboxIndexBuffer;
 	Microsoft::WRL::ComPtr<ID3D11Buffer>		constantBuffer;
+	Microsoft::WRL::ComPtr<ID3D11Buffer>		lightConstantBuffer;
 
 	Microsoft::WRL::ComPtr<ID3D11VertexShader>	vertexShader;
 	Microsoft::WRL::ComPtr<ID3D11VertexShader>	skyBoxVertexShader;
@@ -104,14 +106,7 @@ public:
 		pLightDesc.StructureByteStride = 0;
 		creator->CreateBuffer(&pLightDesc, nullptr, constantBuffer.GetAddressOf());
 
-		D3D11_SAMPLER_DESC samplerDesc;
-		samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-		samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-		samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-		samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-		samplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-		samplerDesc.MinLOD = 0;
-		samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+		CD3D11_SAMPLER_DESC samplerDesc = CD3D11_SAMPLER_DESC(CD3D11_DEFAULT());
 		creator->CreateSamplerState(&samplerDesc, &samplerState);
 
 		// Create Vertex Shader
@@ -138,7 +133,8 @@ public:
 		creator->CreateInputLayout(format, ARRAYSIZE(format), VertexShader, sizeof(VertexShader), vertexFormat.GetAddressOf());
 		creator->CreateInputLayout(format, ARRAYSIZE(format), SkyBoxVertexShader, sizeof(SkyBoxVertexShader), vertexFormat.GetAddressOf());
 
-		D3D11_RASTERIZER_DESC rasterizerDesc;
+		CD3D11_RASTERIZER_DESC rasterizerDesc = CD3D11_RASTERIZER_DESC(CD3D11_DEFAULT());
+		//ZeroMemory(&rasterizerDesc, sizeof(D3D11_RASTERIZER_DESC));
 		rasterizerDesc.CullMode = D3D11_CULL_NONE;
 
 		creator->CreateRasterizerState(&rasterizerDesc, &rasterizerState);
@@ -149,8 +145,8 @@ public:
 		depthDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
 		depthDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
 		creator->CreateDepthStencilState(&depthDesc, &depthState);
-		
-		
+
+
 		// free temporary handle
 		creator->Release();
 
@@ -162,9 +158,22 @@ public:
 		GVECTORF up = { 0, 1, 0, 0 };
 		m.LookAtLHF(eye, at, up, Send2Shader.view);
 
+
+
+		//Lights
+		//Point Light
+		point.pos = { 2.0f, 0.0f, 0.0f, 1.0f };
+		point.rgba = { 0.0f, 1.0f, 0.0f, 1.0f };
+		point.radius = { 1.0f, 0.0f, 0.0f, 0.0f };
+		point.cameraPos = CameraPos;
+
 		D3D11_SUBRESOURCE_DATA cData = { &Send2Shader, 0, 0 };
 		CD3D11_BUFFER_DESC cDesc(sizeof(Send2Shader), D3D11_BIND_CONSTANT_BUFFER);
 		creator->CreateBuffer(&cDesc, &cData, constantBuffer.GetAddressOf());
+
+		D3D11_SUBRESOURCE_DATA lightCData = { &Send2Shader, 0, 0 };
+		CD3D11_BUFFER_DESC lightCDesc(sizeof(Send2Shader), D3D11_BIND_CONSTANT_BUFFER);
+		creator->CreateBuffer(&lightCDesc, &lightCData, lightConstantBuffer.GetAddressOf());
 
 		// load texture into VRAM
 		CreateDDSTextureFromFile(creator, L"../metal.dds", (ID3D11Resource**)cubeTexture.GetAddressOf(), srv.GetAddressOf());
@@ -193,21 +202,13 @@ public:
 		d3d.GetRenderTargetView((void**)&view);
 		d3d.GetDepthStencilView((void**)&depth);
 
-		//Lights
-		//Point Light
-		P_Light p;
-		p.pos = { 5.0f, 0.0f, 0.0f, 0.0f };
-		p.rgba = { 1.0f, 0.0f, 0.0f, 1.0f };
-		p.radius = { 1.0f, 0.0f, 0.0f, 0.0f };
-		p.cameraPos = CameraPos;
+		
 
 		// setup the pipeline
 		ID3D11RenderTargetView* const views[] = { view };
 		con->OMSetRenderTargets(ARRAYSIZE(views), views, depth);
-		const UINT strides[] = { sizeof(OBJ_VERT), sizeof(OBJ_VERT) };
-		const UINT offsets[] = { 0, 0 };
-		ID3D11Buffer* const buffs[] = { cubeVertexBuffer.Get(), skyboxVertexBuffer.Get() };
-		con->IASetVertexBuffers(0, ARRAYSIZE(buffs), buffs, strides, offsets);
+		const UINT strides[] = { sizeof(OBJ_VERT) };
+		const UINT offsets[] = { 0 };
 
 		con->PSSetSamplers(0, 1, &samplerState);
 
@@ -216,12 +217,15 @@ public:
 
 		//m.RotationYF(Send2Shader.world, (3.14 / 1000.0f), Send2Shader.world);
 
-		//con->UpdateSubresource(constantBuffer.Get(), 0, nullptr, &p, 0, 0);
+		con->UpdateSubresource(lightConstantBuffer.Get(), 0, nullptr, &point, 0, 0);
 
 		//draw light
-		//p.pos = pLightMatrix.row4;
-		//con->PSSetConstantBuffers(0, 1, constantBuffer.GetAddressOf());
-
+		con->IASetVertexBuffers(0, 1, skyboxVertexBuffer.GetAddressOf(), strides, offsets);
+		GMATRIXF pLightMatrix = GIdentityMatrixF;
+		pLightMatrix.row4 = point.pos;
+		m.RotationYF(pLightMatrix, -3.14f / 100.0f, pLightMatrix);
+		point.pos = pLightMatrix.row4;
+		con->PSSetConstantBuffers(0, 1, lightConstantBuffer.GetAddressOf());
 
 		// Skybox
 		con->PSSetShaderResources(1, 1, skyBoxSRV.GetAddressOf());
@@ -234,20 +238,23 @@ public:
 
 		con->OMSetDepthStencilState(depthState.Get(), 0);
 
-		GVECTORF scale = { 500, 0, 500 };
+		GVECTORF scale = { 1, 1, 1 };
 
 		GMATRIXF skyboxWorld = GIdentityMatrixF;
-		m.InverseF(Send2Shader.view, skyboxWorld);
+		skyboxWorld.row4 = CameraPos;
 		m.ScalingF(skyboxWorld, scale, skyboxWorld);
 		Send2Shader.world = skyboxWorld;
 
 		// update subresource
-		con->UpdateSubresource(constantBuffer.Get(), 0, nullptr, &Send2Shader, sizeof(Send2Shader), 0);
+		con->UpdateSubresource(constantBuffer.Get(), 0, nullptr, &Send2Shader, 0, 0);
 
 		// draw skybox
 		con->DrawIndexed(skybox_indexcount, 0, 0);
 
+		con->ClearDepthStencilView(depth, D3D11_CLEAR_DEPTH, 1, 255);
+
 		// Central Object
+		con->IASetVertexBuffers(0, 1, cubeVertexBuffer.GetAddressOf(), strides, offsets);
 		con->IASetIndexBuffer(cubeIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 		con->VSSetShader(vertexShader.Get(), nullptr, 0);
 		//con->PSSetShader(pixelShader.Get(), nullptr, 0);
@@ -258,7 +265,6 @@ public:
 		scale = { 1, 1, 1 };
 		m.ScalingF(cubeWorld, scale, cubeWorld);
 		m.RotationYF(cubeWorld, 3.14f / 1000.0f, cubeWorld);
-		//m.LerpF(Send2Shader.world, cubeWorld, 1.0f, Send2Shader.world);
 		Send2Shader.world = cubeWorld;
 
 		// update subresource
@@ -266,7 +272,7 @@ public:
 		con->PSSetShaderResources(0, 1, srv.GetAddressOf());
 
 		// draw object
-		con->DrawIndexedInstanced(_9cube_indexcount, 1, 0, 0, 0);
+		con->DrawIndexed(_9cube_indexcount, 0, 0);
 
 		// release temp handles
 		view->Release();
