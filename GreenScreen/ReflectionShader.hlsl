@@ -30,25 +30,25 @@ float4 main(Vertex_OUT input) : SV_TARGET
     rColor = skyBox.Sample(samplerState, reflection);
     
     // Directional light
-    float3 dLightPosition = float3(-1, -1, 5);
+    float3 dLightPosition = { -7, -1, 5 };
     float dLightRatio = saturate(dot(-normalize(dLightPosition), normalize(input.nrm)));
-    float dIntensity = 1.0f;
-    float4 dColor = float4(0.5f, 0.5f, 0.0f, 1) * dIntensity;
+    float4 dColor = { 0.5f, 0.5f, 0.0f, 1.0f };
+    dColor = float4(dColor.rgb * dColor.a, dColor.a);
     float4 dLightResult = dLightRatio * dColor;
     
     // Point Light
     float3 pLightPosition = normalize(p_pos.xyz - input.posW);
-    float attenuation = 1.0 - saturate(length(pLightPosition.xyz - input.nrm) / p_radius);
-    float pIntensity = 1.0f;
-    float4 pColor = p_rgba * pIntensity;
-    float4 pLightResult = (attenuation * attenuation) * pColor;
+    float attenuation = 1.0 - saturate(length(p_pos.xyz - input.posW) / p_radius.x);
+    float4 pColor = float4(p_rgba.rgb * p_rgba.a, p_rgba.a);
+    float4 pLightRatio = saturate(dot(input.nrm, pLightPosition));
+    float4 pLightResult = (attenuation * attenuation) * pColor * pLightRatio;
     
     // Spot Light
     float3 sLightPosition = float3(0, 10, 0);
     float3 coneDirection = float3(0, -1, 0);
     float2 coneAngle = float2(0.93f, 0.99f);
     float sIntensity = 1.0f;
-    float4 sColor = float4(1, 0, 1, 1) * sIntensity;
+    float4 sColor = float4(1, 0, 0, 1) * sIntensity;
     float3 lightDir = normalize(sLightPosition - input.posW);
     float surfaceRatio = saturate(dot(-lightDir, coneDirection));
     float4 spotFac = (surfaceRatio > coneAngle.x) ? 1 : 0;
@@ -58,12 +58,11 @@ float4 main(Vertex_OUT input) : SV_TARGET
     
     // Reflection Maping
     float3 h = normalize(normalize(cameraPos.xyz - input.posW) - (pLightPosition - input.posW) - (dLightPosition - input.posW) - (sLightPosition - input.posW));
-    float specIntensity = 0.25f;
+    float specIntensity = 0.75f;
     float specLighting = (pow(saturate(dot(h, input.nrm)), 2.0f) + saturate(pColor * sColor * dColor)) * specIntensity * rColor;
     
     surface.a = 1.0f;
     float4 ambiant = { 0.75, 0.75, 0.75, 1 };
     float4 color = (ambiant * skyBox.Sample(samplerState, reflection)) * saturate(surface + dLightResult + pLightResult + sLightResult + specLighting);
-    
     return color;
 }

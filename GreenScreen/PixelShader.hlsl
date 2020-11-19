@@ -17,29 +17,27 @@ cbuffer P_Light : register(b0)
     float4 camera_pos;
 }
 
+cbuffer D_Light : register(b1)
+{
+    float4 d_pos;
+    float4 d_rgba;
+}
+
 // an ultra simple hlsl pixel shader
 float4 main(Vertex_OUT input) : SV_TARGET
 {
     float4 surface = mytexture.Sample(samplerState, input.uvw.xy);
     
-    // Ambiant light
-    float3 aLightPosition = float3(-1, -1, 5);
-    float aLightRatio = saturate(dot(-normalize(aLightPosition), normalize(input.nrm)));
-    float4 aColor = float4(0.1f, 0.1f, 0.1f, 1);
-    float4 aLightResult = aLightRatio * aColor;
-    
     // Directional light
-    float3 dLightPosition = float3(-1, -1, 5);
+    float3 dLightPosition = d_pos.xyz;
     float dLightRatio = saturate(dot(-normalize(dLightPosition), normalize(input.nrm)));
-    float dIntensity = 1.0f;
-    float4 dColor = float4(0.0f, 0.0f, 1.0f, 1) * dIntensity;
+    float4 dColor = float4(d_rgba.rgb * d_rgba.a, p_rgba.a);
     float4 dLightResult = dLightRatio * dColor;
     
     // Point Light
     float3 pLightPosition = normalize(p_pos.xyz - input.posW);
-    float attenuation = 1.0 - saturate(length(p_pos.xyz - input.posW) / p_radius.x);
-    float pIntensity = 0.5f;
-    float4 pColor = p_rgba * pIntensity;
+    float attenuation = 1.0 - saturate(length(p_pos.xyz - input.nrm) / p_radius.x);
+    float4 pColor = float4(p_rgba.rgb * p_rgba.a, p_rgba.a);
     float4 pLightResult = (attenuation * attenuation) * pColor;
     
     // Spot Light
@@ -47,7 +45,7 @@ float4 main(Vertex_OUT input) : SV_TARGET
     float3 coneDirection = float3(0, -1, 0);
     float2 coneAngle = float2(0.93f, 0.99f);
     float sIntensity = 1.0f;
-    float4 sColor = float4(1, 0, 0, 1) * sIntensity;
+    float4 sColor = float4(0, 0, 0, 1) * sIntensity;
     float3 lightDir = normalize(sLightPosition - input.posW);
     float surfaceRatio = saturate(dot(-lightDir, coneDirection));
     float4 spotFac = (surfaceRatio > coneAngle.x) ? 1 : 0;

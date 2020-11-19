@@ -14,6 +14,7 @@ set(VERTEX_SHADERS
 	# add vertex shader (.hlsl) files here
 	VertexShader.hlsl
 	SkyBoxVertexShader.hlsl
+	InstancedVertexShader.hlsl
 )
 set(PIXEL_SHADERS 
 	# add pixel shader (.hlsl) files here
