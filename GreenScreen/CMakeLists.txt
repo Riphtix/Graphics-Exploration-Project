@@ -21,6 +21,7 @@ set(PIXEL_SHADERS
 	PixelShader.hlsl
 	ReflectionShader.hlsl
 	SkyBoxPixelShader.hlsl
+	ColorOnlyPixelShader.hlsl
 )
 
 # Add any new C/C++ source code here

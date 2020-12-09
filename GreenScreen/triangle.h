@@ -17,6 +17,7 @@
 #include "PixelShader.h"
 #include "ReflectionShader.h"
 #include "SkyBoxPixelShader.h"
+#include "ColorOnlyPixelShader.h"
 
 using namespace GW::MATH;
 
@@ -53,6 +54,7 @@ class Triangle
 	// proxy handles
 	GW::SYSTEM::GWindow win;
 	GW::GRAPHICS::GDirectX11Surface d3d;
+	GW::INPUT::GInput cameraController;
 
 	// what we need at a minimum to draw a triangle
 	Microsoft::WRL::ComPtr<ID3D11Buffer>		cube9VertexBuffer;
@@ -73,12 +75,14 @@ class Triangle
 	Microsoft::WRL::ComPtr<ID3D11PixelShader>	pixelShader;
 	Microsoft::WRL::ComPtr<ID3D11PixelShader>	skyBoxPixelShader;
 	Microsoft::WRL::ComPtr<ID3D11PixelShader>	reflectionShader;
+	Microsoft::WRL::ComPtr<ID3D11PixelShader>	colorOnlyPixelShader;
 
 	Microsoft::WRL::ComPtr<ID3D11InputLayout>	vertexFormat;
 
 	Microsoft::WRL::ComPtr<ID3D11SamplerState>  samplerState;
 	Microsoft::WRL::ComPtr<ID3D11RasterizerState> rasterizerState;
 	Microsoft::WRL::ComPtr<ID3D11DepthStencilState> depthState;
+	Microsoft::WRL::ComPtr<ID3D11BlendState> blendState;
 
 	// for texuring
 	Microsoft::WRL::ComPtr<ID3D11Texture2D>		cubeTexture;
@@ -93,6 +97,8 @@ public:
 		d3d = _d3d;
 		ID3D11Device* creator;
 		d3d.GetDevice((void**)&creator);
+
+		cameraController.Create(_win);
 
 		D3D11_SUBRESOURCE_DATA cube9BData = { _9cube_data, 0, 0 };
 		CD3D11_BUFFER_DESC cube9BDesc(sizeof(_9cube_data), D3D11_BIND_VERTEX_BUFFER);
@@ -146,6 +152,7 @@ public:
 		creator->CreatePixelShader(PixelShader, sizeof(PixelShader), nullptr, pixelShader.GetAddressOf());
 		creator->CreatePixelShader(SkyBoxPixelShader, sizeof(SkyBoxPixelShader), nullptr, skyBoxPixelShader.GetAddressOf());
 		creator->CreatePixelShader(ReflectionShader, sizeof(ReflectionShader), nullptr, reflectionShader.GetAddressOf());
+		creator->CreatePixelShader(ColorOnlyPixelShader, sizeof(ColorOnlyPixelShader), nullptr, colorOnlyPixelShader.GetAddressOf());
 
 		// Create Input Layout
 		D3D11_INPUT_ELEMENT_DESC format[] = {
@@ -158,7 +165,6 @@ public:
 		creator->CreateInputLayout(format, ARRAYSIZE(format), InstancedVertexShader, sizeof(InstancedVertexShader), vertexFormat.GetAddressOf());
 
 		CD3D11_RASTERIZER_DESC rasterizerDesc = CD3D11_RASTERIZER_DESC(CD3D11_DEFAULT());
-		//ZeroMemory(&rasterizerDesc, sizeof(D3D11_RASTERIZER_DESC));
 		rasterizerDesc.CullMode = D3D11_CULL_NONE;
 
 		creator->CreateRasterizerState(&rasterizerDesc, &rasterizerState);
@@ -169,6 +175,23 @@ public:
 		depthDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
 		depthDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
 		creator->CreateDepthStencilState(&depthDesc, &depthState);
+
+		CD3D11_BLEND_DESC blendDesc = CD3D11_BLEND_DESC(CD3D11_DEFAULT());
+
+		D3D11_RENDER_TARGET_BLEND_DESC rtBlendDesc;
+		ZeroMemory(&rtBlendDesc, sizeof(rtBlendDesc));
+		rtBlendDesc.BlendEnable = true;
+		rtBlendDesc.SrcBlend = D3D11_BLEND_SRC1_COLOR;
+		rtBlendDesc.DestBlend = D3D11_BLEND_BLEND_FACTOR;
+		rtBlendDesc.BlendOp = D3D11_BLEND_OP_ADD;
+		rtBlendDesc.SrcBlendAlpha = D3D11_BLEND_SRC1_ALPHA;
+		rtBlendDesc.DestBlendAlpha = D3D11_BLEND_BLEND_FACTOR;
+		rtBlendDesc.BlendOpAlpha = D3D11_BLEND_OP_ADD;
+		rtBlendDesc.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+		blendDesc.AlphaToCoverageEnable = true;
+		blendDesc.RenderTarget[0] = rtBlendDesc;
+		creator->CreateBlendState(&blendDesc, blendState.GetAddressOf());
 
 
 		// free temporary handle
@@ -186,7 +209,7 @@ public:
 		//Lights
 		//Point Light
 		PointLight.pos = { 3.0f, 0.0f, 0.0f, 1.0f };
-		PointLight.rgba = { 0.0f, 1.0f, 1.0f, 1.0f };
+		PointLight.rgba = { 0.0f, 0.5f, 0.5f, 1.0f };
 		PointLight.radius = { 10.0f, 0.0f, 0.0f, 0.0f };
 		PointLight.cameraPos = CameraPos;
 
@@ -212,6 +235,15 @@ public:
 	}
 	void Render()
 	{
+
+		GVECTORF eye = CameraPos;
+		GVECTORF at = { 0, 0, 0, 0 };
+		GVECTORF up = { 0, 1, 0, 0 };
+		m.LookAtLHF(eye, at, up, Send2Shader.view);
+		m.LookAtLHF(eye, at, up, InstShader.view);
+		PointLight.cameraPos = CameraPos;
+		ControlCamera();
+
 		// modify world
 		GMATRIXF temp = Send2Shader.world;
 
@@ -232,8 +264,6 @@ public:
 		d3d.GetRenderTargetView((void**)&view);
 		d3d.GetDepthStencilView((void**)&depth);
 
-
-
 		// setup the pipeline
 		ID3D11RenderTargetView* const views[] = { view };
 		con->OMSetRenderTargets(ARRAYSIZE(views), views, depth);
@@ -245,14 +275,13 @@ public:
 		// now we can draw
 		con->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		//m.RotationYF(Send2Shader.world, (3.14 / 1000.0f), Send2Shader.world);
-
-
 		//draw light
+		con->OMSetBlendState(0, 0, 0xffffffff);
 		GMATRIXF pLightMatrix = GIdentityMatrixF;
 		pLightMatrix.row4 = PointLight.pos;
-		m.RotationYF(pLightMatrix, 8 * -3.14f / 1000.0f, pLightMatrix);
+		m.RotationYF(pLightMatrix, 4 * -3.14f / 1000.0f, pLightMatrix);
 		PointLight.pos = pLightMatrix.row4;
+		con->PSSetShader(colorOnlyPixelShader.Get(), nullptr, 0);
 		con->UpdateSubresource(pointLightConstantBuffer.Get(), 0, nullptr, &PointLight, 0, 0);
 		con->PSSetConstantBuffers(0, 1, pointLightConstantBuffer.GetAddressOf());
 
@@ -289,10 +318,15 @@ public:
 		con->PSSetShader(reflectionShader.Get(), nullptr, 0);
 		con->VSSetConstantBuffers(0, 1, instConstantBuffer.GetAddressOf());
 
+		// set up blending
+
 		GMATRIXF cubeWorld = GIdentityMatrixF;
 		m.MultiplyMatrixF(cubeWorld, InstShader.world[0], cubeWorld);
+		GVECTORF scale = { 1.0f, 1.0f, 1.0f, 1 };
+		m.ScalingF(cubeWorld, scale, cubeWorld);
 		cubeWorld.row4 = { -2.5, 0, -5, 1 };
 		m.RotationYF(cubeWorld, 3.14f / 1000.0f, cubeWorld);
+
 		InstShader.world[0] = cubeWorld;
 
 		GMATRIXF cubeWorld1 = GIdentityMatrixF;
@@ -300,7 +334,6 @@ public:
 		cubeWorld1.row4 = { -2.5, 0, 5, 1 };
 		m.RotationYF(cubeWorld1, -3.14f / 1000.0f, cubeWorld1);
 		InstShader.world[1] = cubeWorld1;
-
 		GMATRIXF cubeWorld2 = GIdentityMatrixF;
 		m.MultiplyMatrixF(cubeWorld2, InstShader.world[2], cubeWorld2);
 		cubeWorld2.row4 = { 0, -5, 0, 1 };
@@ -313,23 +346,26 @@ public:
 		// draw object
 		con->DrawIndexedInstanced(_9cube_indexcount, 3, 0, 0, 0);
 
+		float blendFactor[] = { PointLight.rgba.x, PointLight.rgba.y, PointLight.rgba.z, PointLight.rgba.w * 0.5f };
+		//float blendFactor[] = { 0.25f, 0.25f, 0.25f, 1.0f };
+		con->OMSetBlendState(blendState.Get(), blendFactor, 0xffffffff);
+
 		con->IASetVertexBuffers(0, 1, cubeVertexBuffer.GetAddressOf(), strides, offsets);
 		con->IASetIndexBuffer(cubeIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 		con->VSSetShader(vertexShader.Get(), nullptr, 0);
 		//con->VSSetShader(instVertexShader.Get(), nullptr, 0);
-		con->PSSetShader(pixelShader.Get(), nullptr, 0);
+		con->PSSetShader(colorOnlyPixelShader.Get(), nullptr, 0);
 		//con->PSSetShader(reflectionShader.Get(), nullptr, 0);
 		con->VSSetConstantBuffers(0, 1, constantBuffer.GetAddressOf());
 
 		GMATRIXF pointLightCubeWorld = GIdentityMatrixF;
-		m.MultiplyMatrixF(pointLightCubeWorld, temp, pointLightCubeWorld);
-		//m.MultiplyNumF(pointLightCubeWorld, 0.5f, pointLightCubeWorld);
-		//m.ScalingF(pointLightCubeWorld, scale, pointLightCubeWorld);
+		scale = { 0.5f, 0.5f, 0.5f, 1 };
+		m.ScalingF(pointLightCubeWorld, scale, pointLightCubeWorld);
 		pointLightCubeWorld.row4 = PointLight.pos;
 		Send2Shader.world = pointLightCubeWorld;
 
 		con->UpdateSubresource(constantBuffer.Get(), 0, nullptr, &Send2Shader, 0, 0);
-		con->PSSetShaderResources(0, 1, srv.GetAddressOf());
+		con->PSSetShaderResources(0, 0, srv.GetAddressOf());
 
 		con->DrawIndexed(cube_indexcount, 0, 0);
 
@@ -337,6 +373,49 @@ public:
 		view->Release();
 		con->Release();
 	}
+
+	void ControlCamera() {
+		//m.RotationYF(Send2Shader.world, 0.001f, Send2Shader.world);
+
+		float key;
+
+		cameraController.GetState(G_KEY_W, key);
+		if (key > 0) {
+			GVECTORF move = { 0.0f, 0.0f, -0.1f, 1.0f };
+			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
+		}
+
+		cameraController.GetState(G_KEY_S, key);
+		if (key > 0) {
+			GVECTORF move = { 0.0f, 0.0f, 0.1f, 1.0f };
+			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
+		}
+
+		cameraController.GetState(G_KEY_A, key);
+		if (key > 0) {
+			GVECTORF move = { 0.1f, 0.0f, 0.0f, 1.0f };
+			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
+		}
+
+		cameraController.GetState(G_KEY_D, key);
+		if (key > 0) {
+			GVECTORF move = { -0.1f, 0.0f, 0.0f, 1.0f };
+			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
+		}
+
+		cameraController.GetState(G_KEY_R, key);
+		if (key > 0) {
+			GVECTORF move = { 0.0f, -0.1f, 0.0f, 1.0f };
+			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
+		}
+
+		cameraController.GetState(G_KEY_F, key);
+		if (key > 0) {
+			GVECTORF move = { 0.0f, 0.1f, 0.0f, 1.0f };
+			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
+		}
+	}
+
 	~Triangle()
 	{
 		// ComPtr will auto release so nothing to do here 
