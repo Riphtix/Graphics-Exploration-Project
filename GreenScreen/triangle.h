@@ -89,6 +89,8 @@ class Triangle
 	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
 	Microsoft::WRL::ComPtr<ID3D11Texture3D>		skyBoxTexture;
 	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> skyBoxSRV;
+	Microsoft::WRL::ComPtr<ID3D11Texture3D>		glassTexture;
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> glassSRV;
 
 public:
 	Triangle(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GDirectX11Surface _d3d)
@@ -179,17 +181,16 @@ public:
 		CD3D11_BLEND_DESC blendDesc = CD3D11_BLEND_DESC(CD3D11_DEFAULT());
 
 		D3D11_RENDER_TARGET_BLEND_DESC rtBlendDesc;
-		ZeroMemory(&rtBlendDesc, sizeof(rtBlendDesc));
+		ZeroMemory(&rtBlendDesc, sizeof(D3D11_RENDER_TARGET_BLEND_DESC));
 		rtBlendDesc.BlendEnable = true;
-		rtBlendDesc.SrcBlend = D3D11_BLEND_SRC1_COLOR;
+		rtBlendDesc.SrcBlend = D3D11_BLEND_SRC_COLOR;
 		rtBlendDesc.DestBlend = D3D11_BLEND_BLEND_FACTOR;
 		rtBlendDesc.BlendOp = D3D11_BLEND_OP_ADD;
-		rtBlendDesc.SrcBlendAlpha = D3D11_BLEND_SRC1_ALPHA;
-		rtBlendDesc.DestBlendAlpha = D3D11_BLEND_BLEND_FACTOR;
+		rtBlendDesc.SrcBlendAlpha = D3D11_BLEND_ONE;
+		rtBlendDesc.DestBlendAlpha = D3D11_BLEND_ZERO;
 		rtBlendDesc.BlendOpAlpha = D3D11_BLEND_OP_ADD;
 		rtBlendDesc.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 
-		blendDesc.AlphaToCoverageEnable = true;
 		blendDesc.RenderTarget[0] = rtBlendDesc;
 		creator->CreateBlendState(&blendDesc, blendState.GetAddressOf());
 
@@ -230,7 +231,7 @@ public:
 		CreateDDSTextureFromFile(creator, L"../metal.dds", (ID3D11Resource**)cubeTexture.GetAddressOf(), srv.GetAddressOf());
 		//CreateDDSTextureFromFile(creator, L"../SkyboxOcean.dds", (ID3D11Resource**)skyBoxTexture.GetAddressOf(), skyBoxSRV.GetAddressOf());
 		CreateDDSTextureFromFile(creator, L"../SunsetSkybox.dds", (ID3D11Resource**)skyBoxTexture.GetAddressOf(), skyBoxSRV.GetAddressOf());
-
+		CreateDDSTextureFromFile(creator, L"../glass.dds", (ID3D11Resource**)glassTexture.GetAddressOf(), glassSRV.GetAddressOf());
 
 	}
 	void Render()
@@ -312,13 +313,9 @@ public:
 		// Instanced Objects
 		con->IASetVertexBuffers(0, 1, cube9VertexBuffer.GetAddressOf(), strides, offsets);
 		con->IASetIndexBuffer(cube9IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-		//con->VSSetShader(vertexShader.Get(), nullptr, 0);
 		con->VSSetShader(instVertexShader.Get(), nullptr, 0);
-		//con->PSSetShader(pixelShader.Get(), nullptr, 0);
 		con->PSSetShader(reflectionShader.Get(), nullptr, 0);
 		con->VSSetConstantBuffers(0, 1, instConstantBuffer.GetAddressOf());
-
-		// set up blending
 
 		GMATRIXF cubeWorld = GIdentityMatrixF;
 		m.MultiplyMatrixF(cubeWorld, InstShader.world[0], cubeWorld);
@@ -346,16 +343,10 @@ public:
 		// draw object
 		con->DrawIndexedInstanced(_9cube_indexcount, 3, 0, 0, 0);
 
-		float blendFactor[] = { PointLight.rgba.x, PointLight.rgba.y, PointLight.rgba.z, PointLight.rgba.w * 0.5f };
-		//float blendFactor[] = { 0.25f, 0.25f, 0.25f, 1.0f };
-		con->OMSetBlendState(blendState.Get(), blendFactor, 0xffffffff);
-
 		con->IASetVertexBuffers(0, 1, cubeVertexBuffer.GetAddressOf(), strides, offsets);
 		con->IASetIndexBuffer(cubeIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 		con->VSSetShader(vertexShader.Get(), nullptr, 0);
-		//con->VSSetShader(instVertexShader.Get(), nullptr, 0);
 		con->PSSetShader(colorOnlyPixelShader.Get(), nullptr, 0);
-		//con->PSSetShader(reflectionShader.Get(), nullptr, 0);
 		con->VSSetConstantBuffers(0, 1, constantBuffer.GetAddressOf());
 
 		GMATRIXF pointLightCubeWorld = GIdentityMatrixF;
@@ -365,7 +356,26 @@ public:
 		Send2Shader.world = pointLightCubeWorld;
 
 		con->UpdateSubresource(constantBuffer.Get(), 0, nullptr, &Send2Shader, 0, 0);
-		con->PSSetShaderResources(0, 0, srv.GetAddressOf());
+		con->PSSetShaderResources(0, 1, srv.GetAddressOf());
+
+		con->DrawIndexed(cube_indexcount, 0, 0);
+
+		// Transparent Cube
+
+		float blendFactor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+		con->OMSetBlendState(blendState.Get(), blendFactor, 0xffffffff);
+
+		con->PSSetShader(pixelShader.Get(), nullptr, 0);
+
+		GMATRIXF transparentCubeWorld = GIdentityMatrixF;
+		scale = { 1.0f, 1.0f, 1.0f, 1 };
+		m.ScalingF(transparentCubeWorld, scale, transparentCubeWorld);
+		m.RotationZF(transparentCubeWorld, -15 * 3.14 / 180, transparentCubeWorld);
+		transparentCubeWorld.row4 = { 0, 0, -2, 1 };
+		Send2Shader.world = transparentCubeWorld;
+
+		con->UpdateSubresource(constantBuffer.Get(), 0, nullptr, &Send2Shader, 0, 0);
+		con->PSSetShaderResources(0, 1, glassSRV.GetAddressOf());
 
 		con->DrawIndexed(cube_indexcount, 0, 0);
 
