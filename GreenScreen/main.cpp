@@ -23,10 +23,14 @@ using namespace GRAPHICS;
 // lets pop a window and use D3D11 to clear to a green screen
 int main()
 {
+	unsigned screenWidth = 800, screenHeight = 600;
 	GWindow win;
 	GEventReceiver msgs;
 	GDirectX11Surface d3d11;
-	if (+win.Create(0, 0, 800, 600, GWindowStyle::WINDOWEDBORDERED))
+
+	D3D11_VIEWPORT viewOne = { 0, 0, screenWidth, screenHeight, 0, 1 };
+	D3D11_VIEWPORT viewTwo = { screenWidth * 0.7f, screenHeight * 0.0f, screenWidth * 0.3f, screenHeight * 0.3f, 0, 1 };
+	if (+win.Create(0, 0, screenWidth, screenHeight, GWindowStyle::WINDOWEDBORDERED))
 	{
 		//float bg_r = 17, bg_g = 157, bg_b = 167;
 
@@ -40,6 +44,11 @@ int main()
 			Triangle tri(win, d3d11);
 			while (+win.ProcessWindowEvents())
 			{
+				win.GetWidth(screenWidth);
+				win.GetHeight(screenHeight);
+				viewOne = { 0, 0, (float)screenWidth, (float)screenHeight, 0, 1 };
+				viewTwo = { screenWidth * 0.7f, screenHeight * 0.0f, screenWidth * 0.3f, screenHeight * 0.3f, 0, 1 };
+
 				IDXGISwapChain* swap;
 				ID3D11DeviceContext* con;
 				ID3D11RenderTargetView* view;
@@ -49,9 +58,13 @@ int main()
 					+d3d11.GetDepthStencilView((void**)&depth) &&
 					+d3d11.GetSwapchain((void**)&swap))
 				{
+					con->RSSetViewports(1, &viewOne);
 					con->ClearRenderTargetView(view, clr);
 					con->ClearDepthStencilView(depth, D3D11_CLEAR_DEPTH, 1, 0);
+					tri.Render();
 
+					con->RSSetViewports(1, &viewTwo);
+					con->ClearDepthStencilView(depth, D3D11_CLEAR_DEPTH, 1, 0);
 					tri.Render();
 					swap->Present(1, 0);
 					// release incremented COM reference counts

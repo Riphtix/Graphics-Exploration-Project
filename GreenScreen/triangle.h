@@ -234,29 +234,52 @@ public:
 		CreateDDSTextureFromFile(creator, L"../SunsetSkybox.dds", (ID3D11Resource**)skyBoxTexture.GetAddressOf(), skyBoxSRV.GetAddressOf());
 		CreateDDSTextureFromFile(creator, L"../glass.dds", (ID3D11Resource**)glassTexture.GetAddressOf(), glassSRV.GetAddressOf());
 
+	}void ControlCamera() {
+		float key;
+
+		cameraController.GetState(G_KEY_W, key);
+		if (key > 0) {
+			GVECTORF move = { 0.0f, 0.0f, -10.0f, 1.0f };
+			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
+		}
+
+		cameraController.GetState(G_KEY_S, key);
+		if (key > 0) {
+			GVECTORF move = { 0.0f, 0.0f, 10.0f, 1.0f };
+			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
+		}
+
+		cameraController.GetState(G_KEY_A, key);
+		if (key > 0) {
+			GVECTORF move = { 10.0f, 0.0f, 0.0f, 1.0f };
+			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
+		}
+
+		cameraController.GetState(G_KEY_D, key);
+		if (key > 0) {
+			GVECTORF move = { -10.0f, 0.0f, 0.0f, 1.0f };
+			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
+		}
+
+		cameraController.GetState(G_KEY_R, key);
+		if (key > 0) {
+			GVECTORF move = { 0.0f, -10.0f, 0.0f, 1.0f };
+			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
+		}
+
+		cameraController.GetState(G_KEY_F, key);
+		if (key > 0) {
+			GVECTORF move = { 0.0f, 10.0f, 0.0f, 1.0f };
+			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
+		}
+
+		float ar = 0;
+		d3d.GetAspectRatio(ar);
+
+		m.ProjectionDirectXLHF(G_PI / 2, ar, 0.1f, 100, Send2Shader.projection);
 	}
 	void Render()
 	{
-
-		GVECTORF eye = CameraPos;
-		GVECTORF at = { 0, 0, 0, 0 };
-		GVECTORF up = { 0, 1, 0, 0 };
-		m.LookAtLHF(eye, at, up, Send2Shader.view);
-		m.LookAtLHF(eye, at, up, InstShader.view);
-		PointLight.cameraPos = CameraPos;
-		ControlCamera();
-
-		// modify world
-		GMATRIXF temp = Send2Shader.world;
-
-		//GMATRIXF pLightMatrix = Send2Shader.world;
-		//m.RotationYF(pLightMatrix, -3.14f / 1000.0f, pLightMatrix);
-
-		// aspect ratio
-		float ar;
-		d3d.GetAspectRatio(ar);
-		m.ProjectionDirectXLHF(G_PI / 2, ar, 0.01f, 1000.0f, Send2Shader.projection);
-		m.ProjectionDirectXLHF(G_PI / 2, ar, 0.01f, 1000.0f, InstShader.projection);
 
 		// grab the context & render target
 		ID3D11DeviceContext* con;
@@ -265,6 +288,23 @@ public:
 		d3d.GetImmediateContext((void**)&con);
 		d3d.GetRenderTargetView((void**)&view);
 		d3d.GetDepthStencilView((void**)&depth);
+
+		ControlCamera();
+		GVECTORF eye = CameraPos;
+		GVECTORF at = { 0, 0, 0, 0 };
+		GVECTORF up = { 0, 1, 0, 0 };
+		m.LookAtLHF(eye, at, up, Send2Shader.view);
+		m.LookAtLHF(eye, at, up, InstShader.view);
+		PointLight.cameraPos = CameraPos;
+
+		// modify world
+		GMATRIXF temp = Send2Shader.world;
+
+		// aspect ratio
+		float ar;
+		d3d.GetAspectRatio(ar);
+		m.ProjectionDirectXLHF(G_PI / 2, ar, 0.01f, 1000.0f, Send2Shader.projection);
+		m.ProjectionDirectXLHF(G_PI / 2, ar, 0.01f, 1000.0f, InstShader.projection);
 
 		// setup the pipeline
 		ID3D11RenderTargetView* const views[] = { view };
@@ -311,6 +351,8 @@ public:
 
 		con->ClearDepthStencilView(depth, D3D11_CLEAR_DEPTH, 1, 255);
 
+		GVECTORF scale = { 1.0f, 1.0f, 1.0f, 1 };
+
 		// Instanced Objects
 		con->IASetVertexBuffers(0, 1, cube9VertexBuffer.GetAddressOf(), strides, offsets);
 		con->IASetIndexBuffer(cube9IndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
@@ -320,11 +362,8 @@ public:
 
 		GMATRIXF cubeWorld = GIdentityMatrixF;
 		m.MultiplyMatrixF(cubeWorld, InstShader.world[0], cubeWorld);
-		GVECTORF scale = { 1.0f, 1.0f, 1.0f, 1 };
-		m.ScalingF(cubeWorld, scale, cubeWorld);
 		cubeWorld.row4 = { -2.5, 0, -5, 1 };
 		m.RotationYF(cubeWorld, 3.14f / 1000.0f, cubeWorld);
-
 		InstShader.world[0] = cubeWorld;
 
 		GMATRIXF cubeWorld1 = GIdentityMatrixF;
@@ -332,8 +371,8 @@ public:
 		cubeWorld1.row4 = { -2.5, 0, 5, 1 };
 		m.RotationYF(cubeWorld1, -3.14f / 1000.0f, cubeWorld1);
 		InstShader.world[1] = cubeWorld1;
+
 		GMATRIXF cubeWorld2 = GIdentityMatrixF;
-		m.MultiplyMatrixF(cubeWorld2, InstShader.world[2], cubeWorld2);
 		cubeWorld2.row4 = { 0, -5, 0, 1 };
 		InstShader.world[2] = cubeWorld2;
 
@@ -342,7 +381,7 @@ public:
 		con->PSSetShaderResources(0, 1, srv.GetAddressOf());
 
 		// draw object
-		con->DrawIndexedInstanced(_9cube_indexcount, 3, 0, 0, 0);
+		con->DrawIndexedInstanced(_9cube_indexcount, 3, 0, 0, 0);;
 
 		con->IASetVertexBuffers(0, 1, cubeVertexBuffer.GetAddressOf(), strides, offsets);
 		con->IASetIndexBuffer(cubeIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
@@ -385,47 +424,7 @@ public:
 		con->Release();
 	}
 
-	void ControlCamera() {
-		//m.RotationYF(Send2Shader.world, 0.001f, Send2Shader.world);
 
-		float key;
-
-		cameraController.GetState(G_KEY_W, key);
-		if (key > 0) {
-			GVECTORF move = { 0.0f, 0.0f, -0.1f, 1.0f };
-			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
-		}
-
-		cameraController.GetState(G_KEY_S, key);
-		if (key > 0) {
-			GVECTORF move = { 0.0f, 0.0f, 0.1f, 1.0f };
-			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
-		}
-
-		cameraController.GetState(G_KEY_A, key);
-		if (key > 0) {
-			GVECTORF move = { 0.1f, 0.0f, 0.0f, 1.0f };
-			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
-		}
-
-		cameraController.GetState(G_KEY_D, key);
-		if (key > 0) {
-			GVECTORF move = { -0.1f, 0.0f, 0.0f, 1.0f };
-			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
-		}
-
-		cameraController.GetState(G_KEY_R, key);
-		if (key > 0) {
-			GVECTORF move = { 0.0f, -0.1f, 0.0f, 1.0f };
-			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
-		}
-
-		cameraController.GetState(G_KEY_F, key);
-		if (key > 0) {
-			GVECTORF move = { 0.0f, 0.1f, 0.0f, 1.0f };
-			m.TranslatelocalF(Send2Shader.view, move, Send2Shader.view);
-		}
-	}
 
 	~Triangle()
 	{
