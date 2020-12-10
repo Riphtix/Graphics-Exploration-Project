@@ -183,7 +183,7 @@ public:
 		D3D11_RENDER_TARGET_BLEND_DESC rtBlendDesc;
 		ZeroMemory(&rtBlendDesc, sizeof(D3D11_RENDER_TARGET_BLEND_DESC));
 		rtBlendDesc.BlendEnable = true;
-		rtBlendDesc.SrcBlend = D3D11_BLEND_SRC_COLOR;
+		rtBlendDesc.SrcBlend = D3D11_BLEND_SRC_ALPHA;
 		rtBlendDesc.DestBlend = D3D11_BLEND_BLEND_FACTOR;
 		rtBlendDesc.BlendOp = D3D11_BLEND_OP_ADD;
 		rtBlendDesc.SrcBlendAlpha = D3D11_BLEND_ONE;
@@ -191,6 +191,7 @@ public:
 		rtBlendDesc.BlendOpAlpha = D3D11_BLEND_OP_ADD;
 		rtBlendDesc.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 
+		blendDesc.AlphaToCoverageEnable = true;
 		blendDesc.RenderTarget[0] = rtBlendDesc;
 		creator->CreateBlendState(&blendDesc, blendState.GetAddressOf());
 
