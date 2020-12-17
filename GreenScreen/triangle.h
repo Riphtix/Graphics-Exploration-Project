@@ -400,22 +400,66 @@ public:
 
 		con->DrawIndexed(cube_indexcount, 0, 0);
 
-		// Transparent Cube
+		// Transparent Stuff
 
-		float blendFactor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
-		con->OMSetBlendState(blendState.Get(), blendFactor, 0xffffffff);
+		float glass1Factor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+		con->OMSetBlendState(blendState.Get(), glass1Factor, 0xffffffff);
 
 		con->PSSetShader(pixelShader.Get(), nullptr, 0);
 
-		GMATRIXF transparentCubeWorld = GIdentityMatrixF;
+		GMATRIXF glass1World = GIdentityMatrixF;
 		scale = { 1.0f, 1.0f, 1.0f, 1 };
-		m.ScalingF(transparentCubeWorld, scale, transparentCubeWorld);
-		m.RotationZF(transparentCubeWorld, -15 * 3.14 / 180, transparentCubeWorld);
-		transparentCubeWorld.row4 = { 0, 0, -2, 1 };
-		Send2Shader.world = transparentCubeWorld;
+		m.ScalingF(glass1World, scale, glass1World);
+		m.RotationZF(glass1World, 0 * 3.14 / 180, glass1World);
+		glass1World.row4 = { 0, 0, 0, 1 };
+
+		con->PSSetShader(pixelShader.Get(), nullptr, 0);
+
+		GMATRIXF glass2World = GIdentityMatrixF;
+		scale = { 1.0f, 1.0f, 1.0f, 1 };
+		m.ScalingF(glass2World, scale, glass2World);
+		m.RotationZF(glass2World, 0 * 3.14 / 180, glass2World);
+		glass2World.row4 = { -4, 0, 0, 1 };
+
+		GVECTORF glassPos = GZeroVectorF;
+		v.TransformF(glassPos, glass1World, glassPos);
+
+		float distX = glassPos.x - CameraPos.x;
+		float distY = glassPos.y - CameraPos.y;
+		float distZ = glassPos.z - CameraPos.z;
+
+		float glass1Dist = distX * distX + distY * distY + distZ * distZ;
+
+		glassPos = GZeroVectorF;
+		v.TransformF(glassPos, glass2World, glassPos);
+
+		distX = glassPos.x - CameraPos.x;
+		distY = glassPos.y - CameraPos.y;
+		distZ = glassPos.z - CameraPos.z;
+
+		float glass2Dist = distX * distX + distY * distY + distZ * distZ;
+
+		if (glass1Dist < glass2Dist) {
+			GMATRIXF tempMat = glass1World;
+			glass1World = glass2World;
+			glass2World = tempMat;
+		}
+
+		Send2Shader.world = glass1World;
 
 		con->UpdateSubresource(constantBuffer.Get(), 0, nullptr, &Send2Shader, 0, 0);
 		con->PSSetShaderResources(0, 1, glassSRV.GetAddressOf());
+
+		con->DrawIndexed(cube_indexcount, 0, 0);
+
+		Send2Shader.world = glass2World;
+
+		con->UpdateSubresource(constantBuffer.Get(), 0, nullptr, &Send2Shader, 0, 0);
+		con->PSSetShaderResources(0, 1, glassSRV.GetAddressOf());
+
+
+		float glass2Factor[] = { 1.0f, 1.0f, 0.0f, 1.0f };
+		//con->OMSetBlendState(blendState.Get(), glass2Factor, 0xffffffff);
 
 		con->DrawIndexed(cube_indexcount, 0, 0);
 
@@ -423,8 +467,6 @@ public:
 		view->Release();
 		con->Release();
 	}
-
-
 
 	~Triangle()
 	{
