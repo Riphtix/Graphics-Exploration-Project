@@ -23,7 +23,7 @@ using namespace GRAPHICS;
 // lets pop a window and use D3D11 to clear to a green screen
 int main()
 {
-	unsigned screenWidth = 800, screenHeight = 600;
+	unsigned screenWidth = 1295, screenHeight = 806;
 	GWindow win;
 	GEventReceiver msgs;
 	GDirectX11Surface d3d11;
@@ -65,7 +65,7 @@ int main()
 
 					con->RSSetViewports(1, &viewTwo);
 					con->ClearDepthStencilView(depth, D3D11_CLEAR_DEPTH, 1, 0);
-					tri.Render();
+					//tri.Render();
 					swap->Present(1, 0);
 					// release incremented COM reference counts
 					swap->Release();

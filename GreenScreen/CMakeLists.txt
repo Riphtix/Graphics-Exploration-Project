@@ -22,6 +22,7 @@ set(PIXEL_SHADERS
 	ReflectionShader.hlsl
 	SkyBoxPixelShader.hlsl
 	ColorOnlyPixelShader.hlsl
+	SpecPixelShader.hlsl
 )
 
 # Add any new C/C++ source code here
@@ -33,6 +34,11 @@ add_executable (GreenScreen
 	sphere.h
 	skybox.h
 	9cube.h
+	DwarfArmor.h
+	DwarfAxe.h
+	DwarfBody.h
+	DwarfLeather.h
+	DwarfShirt.h
 	DDSTextureLoader.h
 	DDSTextureLoader.cpp
 	${VERTEX_SHADERS}
